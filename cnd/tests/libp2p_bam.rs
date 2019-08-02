@@ -1,23 +1,29 @@
-use bam::json::Response;
-use cnd::libp2p_bam::{BamBehaviour, BehaviourOutEvent, PendingIncomingRequest};
+use bam::json::{OutgoingRequest, Response};
+use cnd::{
+    libp2p_bam::{BamBehaviour, BehaviourOutEvent, PendingIncomingRequest},
+    network::DialInformation,
+};
 use futures::{future::Future, Stream};
 use libp2p::{
     core::{
+        either::EitherError,
         muxing::{StreamMuxerBox, SubstreamRef},
-        swarm::{NetworkBehaviour, NetworkBehaviourEventProcess},
-        transport::MemoryTransport,
-        upgrade::{InboundUpgradeExt, OutboundUpgradeExt},
+        swarm::NetworkBehaviourEventProcess,
+        transport::{
+            boxed::Boxed, memory::MemoryTransportError, upgrade::TransportUpgradeError,
+            MemoryTransport,
+        },
+        upgrade::{InboundUpgradeExt, OutboundUpgradeExt, UpgradeError},
     },
     identity::Keypair,
+    secio::{SecioConfig, SecioError},
     Multiaddr, NetworkBehaviour, PeerId, Transport,
 };
 use rand::{rngs::OsRng, RngCore};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{Arc, Mutex},
-    time::Duration,
 };
-use tokio::prelude::*;
 
 #[derive(NetworkBehaviour)]
 struct TestBehaviour<TSubstream> {
@@ -27,8 +33,8 @@ struct TestBehaviour<TSubstream> {
 impl<TSubstream> NetworkBehaviourEventProcess<BehaviourOutEvent> for TestBehaviour<TSubstream> {
     fn inject_event(&mut self, event: BehaviourOutEvent) {
         match event {
-            BehaviourOutEvent::PendingIncomingRequest { request, peer_id } => {
-                let PendingIncomingRequest { request, channel } = request;
+            BehaviourOutEvent::PendingIncomingRequest { request, .. } => {
+                let PendingIncomingRequest { channel, .. } = request;
 
                 channel.send(Response::new(bam::Status::OK(0))).unwrap();
             }
@@ -37,30 +43,45 @@ impl<TSubstream> NetworkBehaviourEventProcess<BehaviourOutEvent> for TestBehavio
 }
 
 #[test]
-fn ping_responds_with_pong() {
-    let request = r#"{"type":"REQUEST","payload":{"type":"PING"}}"#;
-    let expected_response = r#"{"type":"RESPONSE","payload":{},"status":"OK00"}"#;
-
+fn ping_responds_with_ok() {
     let mut runtime = tokio::runtime::Runtime::new().unwrap();
 
-    let alice = spawn_actor(&mut runtime);
-    let bob = spawn_actor(&mut runtime);
+    let mut ping_headers = HashMap::new();
+    ping_headers.insert(String::from("PING"), HashSet::new());
+
+    let (alice_swarm, _alice_address, _alice_key) = spawn_actor(&mut runtime, HashMap::new());
+    let (_bob_swarm, bob_address, bob_key) = spawn_actor(&mut runtime, ping_headers);
+
+    let response = {
+        let mut alice_swarm = alice_swarm.lock().unwrap();
+        let response = alice_swarm.bam.send_request(
+            DialInformation {
+                peer_id: PeerId::from_public_key(bob_key.public()),
+                address_hint: Some(bob_address),
+            },
+            OutgoingRequest::new("PING"),
+        );
+
+        response
+    };
+
+    let response = runtime.block_on(response).unwrap();
+
+    assert_eq!(response, Response::new(bam::Status::OK(0)))
 }
 
 fn spawn_actor(
     runtime: &mut tokio::runtime::Runtime,
+    known_request_headers: HashMap<String, HashSet<String>>,
 ) -> (
     Arc<
         Mutex<
             libp2p::Swarm<
-                libp2p::core::transport::boxed::Boxed<
+                Boxed<
                     (PeerId, StreamMuxerBox),
-                    libp2p::core::either::EitherError<
-                        libp2p::core::transport::upgrade::TransportUpgradeError<
-                            libp2p::core::transport::memory::MemoryTransportError,
-                            libp2p::secio::SecioError,
-                        >,
-                        libp2p::core::upgrade::UpgradeError<std::io::Error>,
+                    EitherError<
+                        TransportUpgradeError<MemoryTransportError, SecioError>,
+                        UpgradeError<std::io::Error>,
                     >,
                 >,
                 TestBehaviour<SubstreamRef<Arc<StreamMuxerBox>>>,
@@ -73,16 +94,18 @@ fn spawn_actor(
     let keypair = Keypair::generate_ed25519();
 
     let behaviour = TestBehaviour {
-        bam: BamBehaviour::new(HashMap::new()),
+        bam: BamBehaviour::new(known_request_headers),
     };
-    let transport = libp2p::core::transport::memory::MemoryTransport::default()
-        .with_upgrade(libp2p::secio::SecioConfig::new(keypair.clone()))
+    let transport = MemoryTransport::default()
+        .with_upgrade(SecioConfig::new(keypair.clone()))
         .and_then(move |output, endpoint| {
             let peer_id = output.remote_key.into_peer_id();
             let peer_id2 = peer_id.clone();
+
             let upgrade = libp2p::yamux::Config::default()
                 .map_inbound(move |muxer| (peer_id, muxer))
                 .map_outbound(move |muxer| (peer_id2, muxer));
+
             libp2p::core::upgrade::apply(output.stream, upgrade, endpoint)
                 .map(|(id, muxer)| (id, StreamMuxerBox::new(muxer)))
         })
