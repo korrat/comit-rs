@@ -49,14 +49,15 @@ fn ping_responds_with_ok() {
     let mut ping_headers = HashMap::new();
     ping_headers.insert(String::from("PING"), HashSet::new());
 
-    let (alice_swarm, _alice_address, _alice_key) = spawn_actor(&mut runtime, HashMap::new());
-    let (_bob_swarm, bob_address, bob_key) = spawn_actor(&mut runtime, ping_headers);
+    let (alice_swarm, _alice_address, _alice_peer_id) =
+        spawn_actor(&mut runtime, ping_headers.clone());
+    let (_bob_swarm, bob_address, bob_peer_id) = spawn_actor(&mut runtime, ping_headers);
 
-    let response = {
-        let mut alice_swarm = alice_swarm.lock().unwrap();
+    let bobs_response = {
+        let mut alice_swarm = alice_swarm.lock().expect("should be able to lock swarm");
         let response = alice_swarm.bam.send_request(
             DialInformation {
-                peer_id: PeerId::from_public_key(bob_key.public()),
+                peer_id: bob_peer_id,
                 address_hint: Some(bob_address),
             },
             OutgoingRequest::new("PING"),
@@ -65,9 +66,9 @@ fn ping_responds_with_ok() {
         response
     };
 
-    let response = runtime.block_on(response).unwrap();
+    let bobs_response = runtime.block_on(bobs_response).unwrap();
 
-    assert_eq!(response, Response::new(bam::Status::OK(0)))
+    assert_eq!(bobs_response, Response::new(bam::Status::OK(0)))
 }
 
 fn spawn_actor(
@@ -89,15 +90,16 @@ fn spawn_actor(
         >,
     >,
     Multiaddr,
-    Keypair,
+    PeerId,
 ) {
     let keypair = Keypair::generate_ed25519();
+    let peer_id = PeerId::from_public_key(bob_key.public());
 
     let behaviour = TestBehaviour {
         bam: BamBehaviour::new(known_request_headers),
     };
     let transport = MemoryTransport::default()
-        .with_upgrade(SecioConfig::new(keypair.clone()))
+        .with_upgrade(SecioConfig::new(keypair))
         .and_then(move |output, endpoint| {
             let peer_id = output.remote_key.into_peer_id();
             let peer_id2 = peer_id.clone();
@@ -111,10 +113,10 @@ fn spawn_actor(
         })
         .boxed();
 
-    let peer_id = PeerId::from_public_key(keypair.public());
-
-    let mut swarm = libp2p::Swarm::new(transport, behaviour, peer_id);
-    let listen: Multiaddr = format!("/memory/{}", OsRng.next_u32()).parse().unwrap();
+    let mut swarm = libp2p::Swarm::new(transport, behaviour, peer_id.clone());
+    let listen: Multiaddr = format!("/memory/{}", OsRng.next_u32())
+        .parse()
+        .expect("should be a valid memory address");
 
     libp2p::Swarm::listen_on(&mut swarm, listen.clone())
         .expect("swarm failed to listen on memory address");
@@ -122,14 +124,16 @@ fn spawn_actor(
 
     {
         let swarm = swarm.clone();
-        let swarm_worker = futures::stream::poll_fn(move || swarm.lock().unwrap().poll())
-            .for_each(|_| Ok(()))
-            .map_err(|e| {
-                log::error!("failed with {:?}", e);
-            });
+        let swarm_worker = futures::stream::poll_fn(move || {
+            swarm.lock().expect("should be able to lock swarm").poll()
+        })
+        .for_each(|_| Ok(()))
+        .map_err(|e| {
+            log::error!("failed with {:?}", e);
+        });
 
         runtime.spawn(swarm_worker);
     }
 
-    (swarm, listen, keypair)
+    (swarm, listen, peer_id)
 }
