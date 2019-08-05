@@ -71,6 +71,35 @@ fn ping_responds_with_ok() {
     assert_eq!(bobs_response, Response::new(bam::Status::OK(0)))
 }
 
+#[test]
+fn unknown_frame_returns_error() {
+    let mut runtime = tokio::runtime::Runtime::new().unwrap();
+
+    let mut ping_headers = HashMap::new();
+    ping_headers.insert(String::from("SOME_UNKNOWN_TYPE"), HashSet::new());
+
+    let (alice_swarm, _alice_address, _alice_peer_id) =
+        spawn_actor(&mut runtime, ping_headers.clone());
+    let (_bob_swarm, bob_address, bob_peer_id) = spawn_actor(&mut runtime, ping_headers);
+
+    let bobs_response = {
+        let mut alice_swarm = alice_swarm.lock().expect("should be able to lock swarm");
+        let response = alice_swarm.bam.send_request(
+            DialInformation {
+                peer_id: bob_peer_id,
+                address_hint: Some(bob_address),
+            },
+            OutgoingRequest::new("SOME_UNKNOWN_TYPE"),
+        );
+
+        response
+    };
+
+    let bobs_response = runtime.block_on(bobs_response).unwrap();
+
+    assert_eq!(bobs_response, Response::new(bam::Status::OK(0)))
+}
+
 fn spawn_actor(
     runtime: &mut tokio::runtime::Runtime,
     known_request_headers: HashMap<String, HashSet<String>>,
