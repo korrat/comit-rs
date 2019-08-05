@@ -1,7 +1,14 @@
 use bam::json::{OutgoingRequest, Response};
 use cnd::{
+    btsieve::BtsieveHttpClient,
+    config::Settings,
     libp2p_bam::{BamBehaviour, BehaviourOutEvent, PendingIncomingRequest},
-    network::DialInformation,
+    network::{self, Behaviour, DialInformation},
+    swap_protocols::{
+        self,
+        rfc003::state_store::{InMemoryStateStore, StateStore},
+        InMemoryMetadataStore, Metadata, SwapId,
+    },
 };
 use futures::{future::Future, Stream};
 use libp2p::{
@@ -21,6 +28,8 @@ use libp2p::{
 };
 use rand::{rngs::OsRng, RngCore};
 use std::{
+    any::Any,
+    cmp::Eq,
     collections::{HashMap, HashSet},
     sync::{Arc, Mutex},
 };
@@ -73,7 +82,28 @@ fn ping_responds_with_ok() {
 
 #[test]
 fn unknown_frame_returns_error() {
+    let settings = Settings::from_default();
+
+    let mut metadata: HashMap<&str, Metadata> = HashMap::new();
+    let mut states: HashMap<&str, Box<dyn Any + Send + Sync>> = HashMap::new();
+
+    let metadata_store = Arc::new(InMemoryMetadataStore {
+        metadata: Mutex::new(metadata),
+    });
+    let state_store = Arc::new(InMemoryStateStore {
+        states: Mutex::new(states),
+    });
+    let btsieve_client = create_btsieve_api_client(&settings);
+
+    let bob_protocol_dependencies = swap_protocols::bob::ProtocolDependencies {
+        ledger_events: btsieve_client.clone().into(),
+        metadata_store: Arc::clone(&metadata_store),
+        state_store: Arc::clone(&state_store),
+        seed: settings.comit.secret_seed,
+    };
+
     let mut runtime = tokio::runtime::Runtime::new().unwrap();
+    let behaviour = network::Behaviour::new(bob_protocol_dependencies, runtime.executor()).unwrap();
 
     let mut ping_headers = HashMap::new();
     ping_headers.insert(String::from("SOME_UNKNOWN_TYPE"), HashSet::new());
@@ -98,6 +128,16 @@ fn unknown_frame_returns_error() {
     let bobs_response = runtime.block_on(bobs_response).unwrap();
 
     assert_eq!(bobs_response, Response::new(bam::Status::OK(0)))
+}
+
+fn create_btsieve_api_client(settings: &Settings) -> BtsieveHttpClient {
+    BtsieveHttpClient::new(
+        &settings.btsieve.url,
+        settings.btsieve.bitcoin.poll_interval_secs,
+        settings.btsieve.bitcoin.network,
+        settings.btsieve.ethereum.poll_interval_secs,
+        settings.btsieve.ethereum.network,
+    )
 }
 
 fn spawn_actor(

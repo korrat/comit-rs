@@ -1,5 +1,7 @@
-use super::config_file::{Btsieve, Comit, ConfigFile, HttpSocket, Network};
+use super::config_file::{ConfigFile, HttpSocket};
+use crate::config::config_file::{Btsieve, Comit, Network};
 use log::LevelFilter;
+use rand::rngs::OsRng;
 
 /// This structs represents the settings as they are used through out the code.
 ///
@@ -42,6 +44,10 @@ impl Settings {
                     cnd: default_cnd_level_filter(),
                 }),
         }
+    }
+
+    pub fn from_default() -> Self {
+        Settings::from_config_file_and_defaults(ConfigFile::default(OsRng))
     }
 }
 
