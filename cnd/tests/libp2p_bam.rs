@@ -93,7 +93,7 @@ fn spawn_actor(
     PeerId,
 ) {
     let keypair = Keypair::generate_ed25519();
-    let peer_id = PeerId::from_public_key(bob_key.public());
+    let peer_id = PeerId::from_public_key(keypair.public());
 
     let behaviour = TestBehaviour {
         bam: BamBehaviour::new(known_request_headers),
