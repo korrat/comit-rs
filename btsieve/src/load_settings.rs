@@ -13,6 +13,7 @@ pub struct Opt {
 
 pub fn load_settings(opt: Opt) -> Result<Settings, ConfigError> {
     if let Some(file) = opt.config_file {
+        println!("Using config file at {:?}", file);
         return parse_config_file(file);
     }
 
@@ -21,7 +22,7 @@ pub fn load_settings(opt: Opt) -> Result<Settings, ConfigError> {
     // OSX: /Users/<user>/Library/Preferences/comit-network.btsieve
     if let Some(proj_dirs) = ProjectDirs::from("", "comit-network", "btsieve") {
         let file = Path::join(proj_dirs.config_dir(), "btsieve.toml");
-        log::info!(
+        println!(
             "Config file was not provided - looking up config file in default location at: {:?}",
             file
         );
