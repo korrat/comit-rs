@@ -20,7 +20,7 @@ pub use bitcoin::{
     Address,
 };
 pub use bitcoin_hashes::{
-    hash160::Hash as Hash160, hex::FromHex, sha256d::Hash as Sha256dHash, Hash,
+    self, hash160::Hash as Hash160, hex::FromHex, sha256d::Hash as Sha256dHash, Hash,
 };
 pub use bitcoin_quantity::*;
 pub use Sha256dHash as TransactionId;
