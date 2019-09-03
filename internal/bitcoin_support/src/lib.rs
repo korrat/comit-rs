@@ -9,7 +9,7 @@ pub use bitcoin::{
         script::{self, Script},
         transaction::{OutPoint, SigHashType, Transaction, TxIn, TxOut},
     },
-    consensus::{deserialize, encode::serialize_hex, serialize},
+    consensus::{self, deserialize, encode::serialize_hex, serialize},
     util::{
         bip143::SighashComponents,
         bip32::{self, ChainCode, ChildNumber, ExtendedPrivKey, ExtendedPubKey, Fingerprint},

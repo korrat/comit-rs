@@ -1,6 +1,6 @@
 use crate::blocksource::{self, BlockSource};
 use bitcoin_support::{
-    deserialize, Block, BlockHeader, FromHex, MinedBlock, Network, OutPoint, Script, Sha256dHash,
+    deserialize, Block, BlockHeader, FromHex, MinedBlock, Network, OutPoint, Sha256dHash,
     Transaction, TxIn, TxOut,
 };
 use futures::{Future, Stream};
@@ -21,20 +21,35 @@ pub enum Error {
     Reqwest(reqwest::Error),
     Hex(hex::FromHexError), // TODO: Remove
     BlockDeserialization(String),
+    WitnessDeserialization(bitcoin_support::consensus::encode::Error),
 }
 
 impl From<bitcoin_support::bitcoin_hashes::Error> for Error {
     fn from(e: bitcoin_support::bitcoin_hashes::Error) -> Self {
-        Error::BlockDeserialization(format!("Unable to deserialize hash"))
+        Error::BlockDeserialization(format!("Unable to deserialize hash {:?}", e))
+    }
+}
+
+impl From<hex::FromHexError> for Error {
+    fn from(e: hex::FromHexError) -> Self {
+        Error::Hex(e)
+    }
+}
+
+impl From<bitcoin_support::consensus::encode::Error> for Error {
+    fn from(e: bitcoin_support::consensus::encode::Error) -> Self {
+        Error::WitnessDeserialization(e)
     }
 }
 
 #[derive(Clone)]
-pub struct BlockchainInfoHttpBlockSource {
+pub struct BlockchainInfoHttpJsonBlockSource {
     network: Network,
     client: Client,
 }
 
+// TODO: Try to deserialize the script using deserialize instead of the HEX
+// create
 #[derive(Deserialize)]
 struct BlockchainInfoRawBlock {
     ver: u32,
@@ -58,10 +73,10 @@ impl BlockchainInfoRawBlock {
             tx,
         } = self;
 
-        let txs = tx
+        let txs: Result<Vec<Transaction>, Error> = tx
             .into_iter()
             .map(|raw_block_tx| raw_block_tx.into_tx())
-            .collect::<Vec<_>>();
+            .collect();
 
         Ok(Block {
             header: BlockHeader {
@@ -72,7 +87,7 @@ impl BlockchainInfoRawBlock {
                 bits,
                 nonce,
             },
-            txdata: txs,
+            txdata: txs?,
         })
     }
 }
@@ -86,7 +101,7 @@ struct BlockchainInfoRawBlockTransaction {
 }
 
 impl BlockchainInfoRawBlockTransaction {
-    pub fn into_tx(self) -> Transaction {
+    pub fn into_tx(self) -> Result<Transaction, Error> {
         let Self {
             lock_time,
             ver,
@@ -94,31 +109,35 @@ impl BlockchainInfoRawBlockTransaction {
             out,
         } = self;
 
-        Transaction {
+        let tx_ins: Result<Vec<TxIn>, Error> = inputs
+            .into_iter()
+            .map(|raw_block_tx_in| raw_block_tx_in.into_tx_in())
+            .collect();
+
+        let tx_outs: Result<Vec<TxOut>, Error> = out
+            .into_iter()
+            .map(|raw_block_tx_out| raw_block_tx_out.into_tx_out())
+            .collect();
+
+        Ok(Transaction {
             version: ver,
             lock_time,
-            input: inputs
-                .into_iter()
-                .map(|raw_block_tx_in| raw_block_tx_in.into_tx_in())
-                .collect::<Vec<_>>(),
-            output: out
-                .into_iter()
-                .map(|raw_block_tx_out| raw_block_tx_out.into_tx_out())
-                .collect::<Vec<_>>(),
-        }
+            input: tx_ins?,
+            output: tx_outs?,
+        })
     }
 }
 
 #[derive(Deserialize)]
 struct BlockchainInfoRawBlockTransactionInput {
     sequence: u32,
-    witness: Vec<u8>,
-    prev_out: Option<BlockchainInfoRawBlockTransactionOutput>,
-    script: Vec<u8>,
+    witness: String,
+    prev_out: Option<BlockchainInfoRawBlockTransactionOutputSpendingOutpoint>,
+    script: String,
 }
 
 impl BlockchainInfoRawBlockTransactionInput {
-    pub fn into_tx_in(self) -> TxIn {
+    pub fn into_tx_in(self) -> Result<TxIn, Error> {
         let Self {
             sequence,
             witness,
@@ -126,14 +145,24 @@ impl BlockchainInfoRawBlockTransactionInput {
             script,
         } = self;
 
-        TxIn {
+        let witness = hex::decode(witness)?;
+        let witness = deserialize(witness.as_ref())?;
+
+        Ok(TxIn {
             previous_output: prev_out
-                .map(|prev_out| OutPoint::default())
-                .unwrap_or_else(|| OutPoint::null()), // TODO: match properly
-            script_sig: Script::from(hex::decode(script).unwrap()), // TODO: fix unwrap
+                .map(|_prev_out| OutPoint::default())
+                .unwrap_or_else(|| {
+                    // TODO: Retrieve the transaction's hash (by index as we only get the index from
+                    // the API here...)
+                    // Note: does not work for blockchain.info and testnet, evaluate blockstream instead
+
+                    OutPoint::default()
+                }),
+            // TODO: ole, remove: Script::from(hex::decode(script.into_bytes())?)
+            script_sig: deserialize(script.as_ref())?,
             sequence,
-            witness: unimplemented!(), // TODO: map properly, matching problems
-        }
+            witness, // TODO: to be tested if the serialization just works like this
+        })
     }
 }
 
@@ -152,13 +181,13 @@ struct BlockchainInfoRawBlockTransactionOutput {
 }
 
 impl BlockchainInfoRawBlockTransactionOutput {
-    fn into_tx_out(self) -> TxOut {
+    fn into_tx_out(self) -> Result<TxOut, Error> {
         let Self { value, script } = self;
 
-        TxOut {
+        Ok(TxOut {
             value,
-            script_pubkey: Script::from(hex::decode(script).unwrap()), // TODO: fix unwrap,
-        }
+            script_pubkey: deserialize(script.as_ref())?,
+        })
     }
 }
 
@@ -168,7 +197,7 @@ struct BlockchainInfoRawBlockTransactionOutputSpendingOutpoint {
     n: u32,
 }
 
-impl BlockchainInfoHttpBlockSource {
+impl BlockchainInfoHttpJsonBlockSource {
     pub fn new(network: Network) -> Result<Self, Error> {
         // Currently configured for Testnet
 
@@ -190,7 +219,7 @@ impl BlockchainInfoHttpBlockSource {
         }
     }
 
-    pub fn latest_block(&self) -> impl Future<Item = MinedBlock, Error = Error> + Send + 'static {
+    fn latest_block(&self) -> impl Future<Item = MinedBlock, Error = Error> + Send + 'static {
         let cloned_self = self.clone();
 
         self.latest_block_without_tx()
@@ -259,7 +288,7 @@ impl BlockchainInfoHttpBlockSource {
     }
 }
 
-impl BlockSource for BlockchainInfoHttpBlockSource {
+impl BlockSource for BlockchainInfoHttpJsonBlockSource {
     type Block = MinedBlock;
     type Error = Error;
 
@@ -307,5 +336,30 @@ impl BlockSource for BlockchainInfoHttpBlockSource {
             }).filter_map(|maybe_block| maybe_block);
 
         Box::new(stream)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn serialize_block() {
+        let mut runtime = tokio::runtime::Runtime::new().unwrap();
+
+        let block_source = BlockchainInfoHttpJsonBlockSource::new(Network::Testnet).unwrap();
+
+        let future = block_source
+            .latest_block()
+            .map(|block| {
+                //                println!(
+                //                    "height: {}, block.header.version: {}",
+                //                    block.height, block.block.header.version
+                //                );
+                assert_eq!(592_092, block.height);
+            })
+            .map_err(|e| panic!(e));
+
+        runtime.block_on(future);
     }
 }
