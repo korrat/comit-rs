@@ -179,6 +179,7 @@ impl BlockstreamtransactionVout {
 
 #[derive(Clone)]
 pub struct BlockstreamBitcoinHttpBlockSource {
+    network: Network,
     base_url: String,
     client: Client,
 }
@@ -187,10 +188,12 @@ impl BlockstreamBitcoinHttpBlockSource {
     pub fn new(network: Network) -> Result<Self, Error> {
         match network {
             Network::Mainnet => Ok(Self {
+                network,
                 base_url: "https://blockstream.info/api".to_owned(),
                 client: Client::new(),
             }),
             Network::Testnet => Ok(Self {
+                network,
                 base_url: "https://blockstream.info/testnet/api".to_owned(),
                 client: Client::new(),
             }),
@@ -209,17 +212,20 @@ impl BlockstreamBitcoinHttpBlockSource {
 
     pub fn latest_block(&self) -> impl Future<Item = MinedBlock, Error = Error> + Send + 'static {
         // TODO: 1. Get latest 10 blocks using https://github.com/Blockstream/esplora/blob/master/API.md#get-blocksstart_height
-        //      Only the last block is needed, but there is no endpoint to retrieve the last block as such (including height and hash)
-        //      Thus, just map the array on the fly to just retrieve the block with highest height
-        //          use vec: https://stackoverflow.com/questions/44610594/how-can-i-deserialize-json-with-a-top-level-array-using-serde
-        //          or max visitor: https://serde.rs/stream-array.html
+        //      Only the last block is needed, but there is no endpoint to retrieve the
+        // last block as such (including height and hash). Thus, just map
+        // the array on the fly to just retrieve the block with highest height
+        //      use vec: https://stackoverflow.com/questions/44610594/how-can-i-deserialize-json-with-a-top-level-array-using-serde
+        //      or max visitor: https://serde.rs/stream-array.html
         // TODO: 2. Fetch all block transactions in bulk (25 per request) using https://github.com/Blockstream/esplora/blob/master/API.md#get-blockhashtxsstart_index
-        //      Goes in steps of 25 (i.e. /, /25, /50, ...). tx_count of block data (1.) can be used to stop.
-        //      There has to be mechanism to distribute the requests over time (e.g. 1 per sec). Blockstream does not have SLA atm.
-        // TODO: 3. Construct MinedBlock from block data retrieved in 1. and transaction data retrieved in 2.
-        //      Conversion already implemented (into_ methods in struct impls above), but not tested yet.
+        //      Goes in steps of 25 (i.e. /, /25, /50, ...). tx_count of block data (1.)
+        // can be used to stop.      There has to be mechanism to distribute the
+        // requests over time (e.g. 1 per sec). Blockstream does not have SLA atm.
+        // TODO: 3. Construct MinedBlock from block data retrieved in 1. and transaction
+        // data retrieved in 2.      Conversion already implemented (into_
+        // methods in struct impls above), but not tested yet.
 
-        unimplemented!()
+        futures::future::empty()
     }
 }
 
@@ -231,7 +237,8 @@ impl BlockSource for BlockstreamBitcoinHttpBlockSource {
         &self,
     ) -> Box<dyn Stream<Item = Self::Block, Error = blocksource::Error<Error>> + Send> {
         // TODO: This defines the overall polling interval. To be revised.
-        // TODO: Since we need multiple requests to fetch Transactions it is set to 10 mins for now
+        // TODO: Since we need multiple requests to fetch Transactions it is set to 10
+        // mins for now
         let poll_interval = match self.network {
             Network::Mainnet => 600,
             Network::Testnet => 600,
