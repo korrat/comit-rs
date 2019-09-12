@@ -111,7 +111,7 @@ export function createTests(
                 );
             } else if (isArbitraryStepExecution(action)) {
                 it(`[${actor.name}] ${action.description}`, async function() {
-                    this.timeout(10000);
+                    this.timeout(15000);
                     await action.exec(actor, swapLocations[actor.name]);
                 });
             }
@@ -119,7 +119,7 @@ export function createTests(
 
         if (waitUntil) {
             it(`[${actor.name}] transitions to correct state`, async function() {
-                this.timeout(10000);
+                this.timeout(15000);
                 await actor.pollCndUntil(swapLocations[actor.name], body =>
                     waitUntil(body.properties.state)
                 );
@@ -128,7 +128,7 @@ export function createTests(
 
         if (test) {
             it(`[${actor.name}] ${test.description}`, async function() {
-                this.timeout(10000);
+                this.timeout(15000);
 
                 const body = await actor.pollCndUntil(
                     swapLocations[actor.name],

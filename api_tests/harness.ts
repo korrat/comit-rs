@@ -63,7 +63,7 @@ async function runTests(testFiles: string[]) {
         try {
             btsieveRunner.stopBtsieve();
             nodeRunner.stopCnds();
-            await ledgerRunner.stopLedgers();
+            // await ledgerRunner.stopLedgers();
         } catch (e) {
             console.error("Failed to clean up resources", e);
         }

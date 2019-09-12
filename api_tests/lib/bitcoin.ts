@@ -11,7 +11,20 @@ import {
     TransactionBuilder,
 } from "bitcoinjs-lib";
 import sb from "satoshi-bitcoin";
-import { test_rng } from "./util";
+import {test_rng} from "./util";
+
+let blockTimer: NodeJS.Timeout;
+
+export function startBlockGenerator(interval: number) {
+    blockTimer = global.setInterval(async () => {
+        let blockHashes = await generate();
+        console.log("generated %s", blockHashes);
+    }, interval);
+}
+
+export function stopBlockGenerator() {
+    clearInterval(blockTimer);
+}
 
 export interface BitcoinNodeConfig {
     network: string;
@@ -32,6 +45,7 @@ interface VerboseRawTransactionResponse {
         };
         value: number;
     }>;
+    blockhash: string;
 }
 
 type HexRawTransactionResponse = string;
@@ -172,6 +186,7 @@ export class BitcoinWallet {
     public async sendToAddress(to: string, value: number) {
         const txb = new TransactionBuilder();
         const utxo = this.bitcoinUtxos.shift();
+        console.log("uto: ", utxo);
         const inputAmount = utxo.value;
         const keyPair = this.keypair;
         const fee = 2500;
@@ -182,6 +197,10 @@ export class BitcoinWallet {
         txb.sign(0, keyPair, null, null, inputAmount);
 
         return bitcoinRpcClient.sendRawTransaction(txb.build().toHex());
+    }
+
+    getBlockByTx(txid: string) {
+        return (bitcoinRpcClient.getRawTransaction(txid, true)) as Promise<VerboseRawTransactionResponse>;
     }
 }
 

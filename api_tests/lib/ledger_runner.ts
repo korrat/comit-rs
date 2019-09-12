@@ -69,9 +69,7 @@ export class LedgerRunner {
 
             if (ledger === "bitcoin") {
                 bitcoin.init(await this.getBitcoinClientConfig());
-                this.blockTimers.bitcoin = global.setInterval(async () => {
-                    await bitcoin.generate();
-                }, 1000);
+                bitcoin.startBlockGenerator(1000);
             }
         }
     }
@@ -83,6 +81,7 @@ export class LedgerRunner {
             console.log(`Stopping ledger ${ledger}`);
 
             clearInterval(this.blockTimers[ledger]);
+            bitcoin.stopBlockGenerator();
             await container.stop();
             delete this.runningLedgers[ledger];
         });
@@ -164,6 +163,7 @@ async function startBitcoinContainer(): Promise<StartedTestContainer> {
             "-debug=1",
             "-acceptnonstdtxn=0",
             "-rest",
+            "-txindex",
         ])
         .withExposedPorts(18443)
         .withWaitStrategy(new LogWaitStrategy("Flushed wallet.dat"))

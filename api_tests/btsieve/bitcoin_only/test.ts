@@ -73,6 +73,7 @@ setTimeout(async function() {
                 });
 
                 it("btsieve should respond with transaction match when requesting on the `toAddress` bitcoin transaction query", async function() {
+                    this.timeout(5000);
                     this.slow(1000);
                     await tobyWallet.btc().sendToAddress(toAddress, 100000000);
 

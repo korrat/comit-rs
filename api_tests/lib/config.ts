@@ -156,7 +156,7 @@ export const BTSIEVE_BASE_CONFIG: BtsieveConfigFile = {
         port_bind: 8181,
     },
     log_levels: {
-        btsieve: "DEBUG",
+        btsieve: "TRACE",
     },
 };
 
