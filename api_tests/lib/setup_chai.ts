@@ -6,7 +6,7 @@ import chaiEach = require("chai-each");
 import chaiHttp = require("chai-http");
 import chaiJsonSchema = require("chai-json-schema");
 import chaiSubset = require("chai-subset");
-import * as sirenJsonSchema from "../siren.schema.json";
+import * as sirenJsonSchema from "../../api_schema/siren.schema.json";
 
 use(chaiHttp);
 use(chaiSubset);

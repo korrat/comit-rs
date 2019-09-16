@@ -1,0 +1,28 @@
+openapi: 3.0.0
+info:
+  title: cnd
+  version: '1.0'
+  contact:
+    name: CoBloX
+    email: team@coblox.tech
+    url: 'https://coblox.tech'
+  description: cnd HTTP API endpoints
+servers:
+  - url: 'http://localhost:8000'
+paths:
+  /swaps:
+    get:
+      operationId: "get-swaps"
+      summary: GET swaps
+      tags: []
+      responses:
+        '200':
+          description: OK
+          headers: {}
+          content:
+            application/vnd.siren+json:
+              schema:
+                $ref: './api_schema/swap.schema.json'
+      description: GET all the swaps
+components:
+  schemas: {}

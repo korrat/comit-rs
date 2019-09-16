@@ -1,11 +1,11 @@
 import { expect, request } from "chai";
 import "chai/register-should";
 import { ethers } from "ethers";
+import * as swapPropertiesJsonSchema from "../../api_schema/swap-properties.schema.json";
 import { EmbeddedRepresentationSubEntity, Entity } from "../gen/siren";
 import { Actor } from "../lib/actor";
 import "../lib/setup_chai";
 import { sleep } from "../lib/util";
-import * as swapPropertiesJsonSchema from "../swap.schema.json";
 
 (async function() {
     const alpha = {

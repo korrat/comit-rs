@@ -1,0 +1,51 @@
+{
+  "definitions": {
+    "$ref": "siren.schema.json#"
+  },
+  "id": "http://sirenspec.org/schema#",
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "Entity",
+  "description": "An Entity is a URI-addressable resource that has properties and actions associated with it. It may contain sub-entities and navigational links.",
+  "type": "object",
+  "required": [
+    "class",
+    "properties"
+  ],
+  "properties": {
+    "class": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/properties/class"
+        },
+        {
+          "items": {
+            "enum": [
+              "swap"
+            ]
+          }
+        }
+      ]
+    },
+    "properties": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/properties/properties"
+        },
+        {
+          "properties": {
+            "$ref": "swap-properties.schema.json#/properties"
+          }
+        }
+      ]
+    },
+    "entities": {
+      "$ref": "#/definitions/properties/entities"
+    },
+    "links": {
+      "$ref": "#/definitions/properties/links"
+    },
+    "actions": {
+      "$ref": "#/definitions/properties/actions"
+    }
+  }
+}

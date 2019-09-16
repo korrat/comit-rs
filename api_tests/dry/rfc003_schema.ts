@@ -1,11 +1,11 @@
 import { expect, request } from "chai";
 import "chai/register-should";
 import { ethers } from "ethers";
+import * as sirenJsonSchema from "../../api_schema/siren.schema.json";
+import * as swapPropertiesJsonSchema from "../../api_schema/swap-properties.schema.json";
 import { EmbeddedRepresentationSubEntity, Entity, Link } from "../gen/siren";
 import { Actor } from "../lib/actor";
 import "../lib/setup_chai";
-import * as sirenJsonSchema from "../siren.schema.json";
-import * as swapPropertiesJsonSchema from "../swap.schema.json";
 
 (async function() {
     const alpha = {
