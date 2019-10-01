@@ -3,6 +3,7 @@
 
 pub mod bitcoin;
 pub mod ethereum;
+pub mod first_or_else;
 
 use futures::{Future, Stream};
 
