@@ -63,6 +63,12 @@ impl From<KeyPair> for (SecretKey, PublicKey) {
     }
 }
 
+impl From<KeyPair> for PublicKey {
+    fn from(keypair: KeyPair) -> PublicKey {
+        keypair.public_key
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

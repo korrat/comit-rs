@@ -1,4 +1,4 @@
-use crate::{network::Network, Hash160};
+use crate::{network::Network, secp256k1, Hash160};
 use bitcoin::{
     hashes::Hash,
     util::{address::Payload, key::PublicKey as BitcoinPublicKey},
@@ -161,6 +161,19 @@ impl Serialize for PubkeyHash {
     }
 }
 
+trait FromSecp256k1PublicKey {
+    fn from_secp256k1(pubkey: secp256k1::PublicKey) -> BitcoinPublicKey;
+}
+
+impl FromSecp256k1PublicKey for BitcoinPublicKey {
+    fn from_secp256k1(key: secp256k1::PublicKey) -> BitcoinPublicKey {
+        BitcoinPublicKey {
+            compressed: key.to_string().len() == 66,
+            key,
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -199,7 +212,7 @@ mod test {
     }
 
     #[test]
-    fn roudtrip_serialization_of_pubkeyhash() {
+    fn roundtrip_serialization_of_pubkeyhash() {
         let public_key = PublicKey::from_str(
             "02c2a8efce029526d364c2cf39d89e3cdda05e5df7b2cbfc098b4e3d02b70b5275",
         )
@@ -209,5 +222,27 @@ mod test {
         assert_eq!(serialized, "\"ac2db2f2615c81b83fe9366450799b4992931575\"");
         let deserialized = serde_json::from_str::<PubkeyHash>(serialized.as_str()).unwrap();
         assert_eq!(deserialized, pubkey_hash);
+    }
+
+    #[test]
+    fn from_compressed_secp_public_key_should_be_compressed() {
+        let public_key = PublicKey::from_str(
+            "02d59c95ff2735dc29b05142551c44a9702d018d0567441af3841724d5dc4c5584",
+        )
+        .unwrap();
+
+        let bitcoin_public_key: BitcoinPublicKey = BitcoinPublicKey::from_secp256k1(public_key);
+        assert_eq!(bitcoin_public_key.compressed, true);
+        assert_eq!(bitcoin_public_key.key, public_key);
+    }
+
+    #[test]
+    fn from_uncompressed_to_secp_public_key_should_also_be_compressed() {
+        let public_key = PublicKey::from_str("04d59c95ff2735dc29b05142551c44a9702d018d0567441af3841724d5dc4c5584a13084750245673f875ffbd7c620195150e5db68ae030f4c6b356073ea377b80",
+        ).unwrap();
+
+        let bitcoin_public_key: BitcoinPublicKey = BitcoinPublicKey::from_secp256k1(public_key);
+        assert_eq!(bitcoin_public_key.compressed, true);
+        assert_eq!(bitcoin_public_key.key, public_key);
     }
 }

@@ -273,7 +273,7 @@ mod tests {
             HashFunction, Timestamp,
         },
     };
-    use bitcoin_support::Amount;
+    use bitcoin_support::{secp256k1, Amount, PublicKey};
     use ethereum_support::EtherQuantity;
     use spectral::prelude::*;
     use std::sync::Arc;
@@ -281,6 +281,17 @@ mod tests {
     #[test]
     fn insert_and_get_state() {
         let state_store = InMemoryStateStore::default();
+        let key: secp256k1::PublicKey = secp256k1_keypair::KeyPair::from_secret_key_slice(
+            &hex::decode("18e14a7b6a307f426a94f8114701e7c8e774e7f9a47e2c2035db29a206321725")
+                .unwrap(),
+        )
+        .unwrap()
+        .into();
+        let alpha_ledger_refund_identity = PublicKey {
+            compressed: key.to_string().len() == 66,
+            key,
+        };
+
         let request = Request {
             id: SwapId::default(),
             alpha_ledger: Bitcoin::default(),
@@ -288,12 +299,7 @@ mod tests {
             alpha_asset: Amount::from_btc(1.0).unwrap(),
             beta_asset: EtherQuantity::from_eth(10.0),
             hash_function: HashFunction::Sha256,
-            alpha_ledger_refund_identity: secp256k1_keypair::KeyPair::from_secret_key_slice(
-                &hex::decode("18e14a7b6a307f426a94f8114701e7c8e774e7f9a47e2c2035db29a206321725")
-                    .unwrap(),
-            )
-            .unwrap()
-            .into(),
+            alpha_ledger_refund_identity,
             beta_ledger_redeem_identity: "8457037fcd80a8650c4692d7fcfc1d0a96b92867"
                 .parse()
                 .unwrap(),

@@ -8,7 +8,7 @@ use crate::{
         HashFunction, SwapId, Timestamp,
     },
 };
-use bitcoin_support::Amount as BitcoinAmount;
+use bitcoin_support::{Amount as BitcoinAmount, PublicKey};
 use ethereum_support::{Erc20Token, EtherQuantity};
 use http_api_problem::{HttpApiProblem, StatusCode as HttpStatusCode};
 use serde::{Deserialize, Serialize};
@@ -164,8 +164,13 @@ impl<AL: Ledger, BL: Ledger, AA: Asset, BA: Asset, I: ToIdentities<AL, BL>>
 
 impl ToIdentities<Bitcoin, Ethereum> for OnlyRedeem<Ethereum> {
     fn to_identities(&self, secret_source: &dyn SecretSource) -> Identities<Bitcoin, Ethereum> {
+        let alpha_ledger_refund_identity = PublicKey {
+            // TODO use function from bitcoin_support
+            compressed: true,
+            key: secret_source.secp256k1_refund().public_key(),
+        };
         Identities {
-            alpha_ledger_refund_identity: secret_source.secp256k1_refund().into(),
+            alpha_ledger_refund_identity,
             beta_ledger_redeem_identity: self.beta_ledger_redeem_identity,
         }
     }
@@ -173,9 +178,14 @@ impl ToIdentities<Bitcoin, Ethereum> for OnlyRedeem<Ethereum> {
 
 impl ToIdentities<Ethereum, Bitcoin> for OnlyRefund<Ethereum> {
     fn to_identities(&self, secret_source: &dyn SecretSource) -> Identities<Ethereum, Bitcoin> {
+        let beta_ledger_redeem_identity = PublicKey {
+            // TODO use function from bitcoin_support
+            compressed: true,
+            key: secret_source.secp256k1_redeem().public_key(),
+        };
         Identities {
             alpha_ledger_refund_identity: self.alpha_ledger_refund_identity,
-            beta_ledger_redeem_identity: secret_source.secp256k1_redeem().into(),
+            beta_ledger_redeem_identity,
         }
     }
 }

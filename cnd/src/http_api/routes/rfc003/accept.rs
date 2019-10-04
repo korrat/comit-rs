@@ -9,6 +9,7 @@ use crate::{
         },
     },
 };
+use bitcoin_support::PublicKey;
 use serde::Deserialize;
 
 #[derive(Deserialize, Clone, Debug)]
@@ -33,9 +34,13 @@ impl IntoAcceptResponseBody<Ethereum, Bitcoin> for OnlyRedeem<Ethereum> {
         self,
         secret_source: &dyn SecretSource,
     ) -> AcceptResponseBody<Ethereum, Bitcoin> {
+        let beta_ledger_refund_identity = PublicKey {
+            compressed: true,
+            key: secret_source.secp256k1_refund().public_key(),
+        };
         AcceptResponseBody {
             alpha_ledger_redeem_identity: self.alpha_ledger_redeem_identity,
-            beta_ledger_refund_identity: secret_source.secp256k1_refund().into(),
+            beta_ledger_refund_identity,
         }
     }
 }
@@ -62,9 +67,13 @@ impl IntoAcceptResponseBody<Bitcoin, Ethereum> for OnlyRefund<Ethereum> {
         self,
         secret_source: &dyn SecretSource,
     ) -> AcceptResponseBody<Bitcoin, Ethereum> {
+        let alpha_ledger_redeem_identity = PublicKey {
+            compressed: true,
+            key: secret_source.secp256k1_redeem().public_key(),
+        };
         AcceptResponseBody {
             beta_ledger_refund_identity: self.beta_ledger_refund_identity,
-            alpha_ledger_redeem_identity: secret_source.secp256k1_redeem().into(),
+            alpha_ledger_redeem_identity,
         }
     }
 }
